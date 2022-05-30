@@ -21,7 +21,7 @@ class URIDict(MutableMapping):
         return urlsplit(uri).geturl()
 
     def __init__(self, *args, **kwargs):
-        self.store = dict()
+        self.store = {}
         self.store.update(*args, **kwargs)
 
     def __getitem__(self, uri):
@@ -79,9 +79,11 @@ def format_as_index(container, indices):
             The indices to format.
     """
 
-    if not indices:
-        return container
-    return f"{container}[{']['.join(repr(index) for index in indices)}]"
+    return (
+        f"{container}[{']['.join(repr(index) for index in indices)}]"
+        if indices
+        else container
+    )
 
 
 def find_additional_properties(instance, schema):
@@ -97,9 +99,9 @@ def find_additional_properties(instance, schema):
     properties = schema.get("properties", {})
     patterns = "|".join(schema.get("patternProperties", {}))
     for property in instance:
-        if property not in properties:
-            if patterns and re.search(patterns, property):
-                continue
+        if property not in properties and (
+            not patterns or not re.search(patterns, property)
+        ):
             yield property
 
 
@@ -108,10 +110,7 @@ def extras_msg(extras):
     Create an error message for extra items or properties.
     """
 
-    if len(extras) == 1:
-        verb = "was"
-    else:
-        verb = "were"
+    verb = "was" if len(extras) == 1 else "were"
     return ", ".join(repr(extra) for extra in sorted(extras)), verb
 
 
@@ -122,9 +121,7 @@ def ensure_list(thing):
     Otherwise, return it unchanged.
     """
 
-    if isinstance(thing, str):
-        return [thing]
-    return thing
+    return [thing] if isinstance(thing, str) else thing
 
 
 def _mapping_equal(one, two):
@@ -216,7 +213,7 @@ def find_evaluated_item_indexes_by_schema(validator, instance, schema):
     evaluated_indexes = []
 
     if "items" in schema:
-        return list(range(0, len(instance)))
+        return list(range(len(instance)))
 
     if "$ref" in schema:
         scope, resolved = validator.resolver.resolve(schema["$ref"])
@@ -229,7 +226,7 @@ def find_evaluated_item_indexes_by_schema(validator, instance, schema):
             validator.resolver.pop_scope()
 
     if "prefixItems" in schema:
-        evaluated_indexes += list(range(0, len(schema["prefixItems"])))
+        evaluated_indexes += list(range(len(schema["prefixItems"])))
 
     if "if" in schema:
         if validator.evolve(schema=schema["if"]).is_valid(instance):
@@ -240,11 +237,10 @@ def find_evaluated_item_indexes_by_schema(validator, instance, schema):
                 evaluated_indexes += find_evaluated_item_indexes_by_schema(
                     validator, instance, schema["then"],
                 )
-        else:
-            if "else" in schema:
-                evaluated_indexes += find_evaluated_item_indexes_by_schema(
-                    validator, instance, schema["else"],
-                )
+        elif "else" in schema:
+            evaluated_indexes += find_evaluated_item_indexes_by_schema(
+                validator, instance, schema["else"],
+            )
 
     for keyword in ["contains", "unevaluatedItems"]:
         if keyword in schema:
@@ -339,10 +335,9 @@ def find_evaluated_property_keys_by_schema(validator, instance, schema):
                 evaluated_keys += find_evaluated_property_keys_by_schema(
                     validator, instance, schema["then"],
                 )
-        else:
-            if "else" in schema:
-                evaluated_keys += find_evaluated_property_keys_by_schema(
-                    validator, instance, schema["else"],
-                )
+        elif "else" in schema:
+            evaluated_keys += find_evaluated_property_keys_by_schema(
+                validator, instance, schema["else"],
+            )
 
     return evaluated_keys
